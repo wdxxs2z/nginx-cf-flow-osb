@@ -156,22 +156,33 @@ func (nsb *NginxDataflowServiceBroker)Deprovision(context context.Context, insta
 	if service.Name == "" {
 		return brokerapi.DeprovisionServiceSpec{}, fmt.Errorf("service (%s) not found in catalog", details.ServiceID)
 	}
+	instanceDir := nsb.config.StoreDataDir + instanceID
 	exist, err := nsb.databaseClient.ExistServiceInstance(instanceID)
 	if err != nil {
 		return brokerapi.DeprovisionServiceSpec{}, err
 	}
-	if exist == false {
-		return brokerapi.DeprovisionServiceSpec{}, fmt.Errorf("service instance (%s) already delete", instanceID)
-	}
-	nginxService, err := nsb.databaseClient.GetServiceInstance(instanceID)
+	app, err := cfClient.GetApplicationWorkflow("nginx-flow-" + instanceID)
 	if err != nil {
 		return brokerapi.DeprovisionServiceSpec{}, err
 	}
-	if err := cfClient.DeleteApplcationWorkflow("nginx-flow-" + instanceID, nginxService.Host, nginxService.Domain); err != nil {
-		return brokerapi.DeprovisionServiceSpec{}, err
-	}
-	if err := nsb.databaseClient.DeleteServiceInstance(instanceID); err != nil {
-		return brokerapi.DeprovisionServiceSpec{}, err
+
+	if app.Name == "" && exist == false {
+		return brokerapi.DeprovisionServiceSpec{}, brokerapi.ErrInstanceDoesNotExist
+	} else if exist && app.Name == ""{
+		if err := nsb.databaseClient.DeleteServiceInstance(instanceID); err != nil {
+			return brokerapi.DeprovisionServiceSpec{}, err
+		}
+	} else if exist == false && app.Name != "" {
+		if err := cfClient.DeleteApplcationWorkflow("nginx-flow-" + instanceID, instanceDir); err != nil {
+			return brokerapi.DeprovisionServiceSpec{}, err
+		}
+	} else {
+		if err := nsb.databaseClient.DeleteServiceInstance(instanceID); err != nil {
+			return brokerapi.DeprovisionServiceSpec{}, err
+		}
+		if err := cfClient.DeleteApplcationWorkflow("nginx-flow-" + instanceID, instanceDir); err != nil {
+			return brokerapi.DeprovisionServiceSpec{}, err
+		}
 	}
 	return brokerapi.DeprovisionServiceSpec{}, nil
 }

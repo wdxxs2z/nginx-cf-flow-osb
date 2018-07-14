@@ -106,7 +106,7 @@ func UpdateApplicationWorkflow(appName, spaceName, routeName, domain string, sou
 	return app, nil
 }
 
-func DeleteApplcationWorkflow(appName string, routeName, domain string) error{
+func DeleteApplcationWorkflow(appName string, instanceDir string) error{
 	client, err := targetCFClient()
 	if err != nil {
 		return err
@@ -115,22 +115,37 @@ func DeleteApplcationWorkflow(appName string, routeName, domain string) error{
 	if err != nil {
 		return err
 	}
-
-	route, err := getRoute(client, routeName, domain)
+	routes, err := getApplicationRoutes(client, app.Guid)
 	if err != nil {
 		return err
 	}
-	err = unmappingRouteWithApplication(client, app.Guid, route.Guid)
+	for _,route := range routes {
+		err = unmappingRouteWithApplication(client, app.Guid, route.Guid)
+		if err != nil {
+			return err
+		}
+		err = deleteAppRoute(client, route.Guid)
+		if err != nil {
+			return err
+		}
+	}
+	err = removeInstanceDir(instanceDir)
 	if err != nil {
 		return err
 	}
-
-	err = deleteRoute(client, routeName, domain)
-	if err != nil {
-		return err
-	}
-
 	return deleteApplication(client, app.Name)
+}
+
+func GetApplicationWorkflow(appName string) (cfclient.App, error){
+	client, err := targetCFClient()
+	if err != nil {
+		return cfclient.App{}, err
+	}
+	app, err := getApplication(client, appName)
+	if err != nil {
+		return cfclient.App{}, err
+	}
+	return app, nil
 }
 
 func CheckApplicationStateWorkflow(appName string) (string, error){
@@ -157,6 +172,14 @@ func CheckApplicationStateWorkflow(appName string) (string, error){
 	default:
 		return "failed", nil
 	}
+}
+
+func getApplicationRoutes(client *cfclient.Client, appGuid string) ([]cfclient.Route, error){
+	routes , err := client.GetAppRoutes(appGuid)
+	if err != nil {
+		return []cfclient.Route{}, err
+	}
+	return routes, nil
 }
 
 func getDomainGuid(client *cfclient.Client, domain string) (string, error) {
@@ -229,12 +252,8 @@ func createRoute(client *cfclient.Client, host, domain, space string) (cfclient.
 	return route, nil
 }
 
-func deleteRoute(client *cfclient.Client, host, domain string) error{
-	route , err := getRoute(client, host, domain)
-	if err != nil {
-		return err
-	}
-	return client.DeleteRoute(route.Guid)
+func deleteAppRoute(client *cfclient.Client, routeGuid string) (error) {
+	return client.DeleteRoute(routeGuid)
 }
 
 func mapRouteToApplication(client *cfclient.Client, appGuid, routeGuid string) (*cfclient.RouteMapping, error){
@@ -350,4 +369,8 @@ func uploadApplication(client *cfclient.Client, appGuid, source, des string) err
 	}
 	defer desZipFile.Close()
 	return client.UploadAppBits(desZipFile, appGuid)
+}
+
+func removeInstanceDir(dir string) error {
+	return os.RemoveAll(dir)
 }

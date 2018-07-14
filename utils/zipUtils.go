@@ -52,7 +52,6 @@ func compress(file *os.File, prefix string, zw *zip.Writer) error {
 		return err
 	}
 	if info.IsDir() {
-		fmt.Println(info.Name())
 		prefix = prefix + "/" + info.Name()
 		fileInfos, err := file.Readdir(-1)
 		if err != nil {
