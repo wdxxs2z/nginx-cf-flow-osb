@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"io"
 	"os"
-	"fmt"
 )
 
 func PathExists(path string) (bool, error) {

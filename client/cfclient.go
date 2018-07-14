@@ -76,34 +76,106 @@ func CreateApplicationWorkflow(appName, spaceName, routeName, domain string, sou
 	return app, nil
 }
 
-func UpdateApplicationWorkflow(appName, spaceName, routeName, domain string, sourceDir string, destinationZip string) (cfclient.App, error){
+func UpdateApplicationWorkflow(appName, spaceName, routeName, domainName string, sourceDir string, destinationZip string) (cfclient.App, error){
 	client, err := targetCFClient()
 	if err != nil {
 		return cfclient.App{}, err
 	}
+	//get origin application
 	app , err := getApplication(client, appName)
 	if err != nil {
 		return cfclient.App{}, err
 	}
-	route, err := getRoute(client, routeName, domain)
+	//create a new application blue
+	bluepp, err := createApplication(client, appName + "-blue", spaceName)
 	if err != nil {
 		return cfclient.App{}, err
 	}
-
-	route, err = createRoute(client, routeName, domain, spaceName)
+	//bind route to blue application
+	domain, err := getDomain(client, domainName)
 	if err != nil {
 		return cfclient.App{}, err
 	}
-	_, err = mapRouteToApplication(client, app.Guid, route.Guid)
+	routes , err := getApplicationRoutes(client, app.Guid)
+	sameRoute := false
+	for _, route := range routes {
+		if route.Host == routeName && domain.Guid == route.DomainGuid {
+			sameRoute = true
+			break
+		}
+	}
+	if !sameRoute {
+		r, err := createRoute(client, routeName, domainName, spaceName)
+		if err != nil {
+			return cfclient.App{}, err
+		}
+		_, err = mapRouteToApplication(client, bluepp.Guid, r.Guid)
+		if err != nil {
+			return cfclient.App{}, err
+		}
+	} else {
+		for _, route := range routes {
+			_, err = mapRouteToApplication(client, bluepp.Guid, route.Guid)
+			if err != nil {
+				return cfclient.App{}, err
+			}
+		}
+	}
+	//upload bits to blue application
+	err = uploadApplication(client, bluepp.Guid, sourceDir, destinationZip)
 	if err != nil {
 		return cfclient.App{}, err
 	}
-
-	err = uploadApplication(client, app.Guid, sourceDir, destinationZip)
-	if err != nil {
-		return cfclient.App{}, err
+	//wait for blue application start up
+	started := make(chan bool)
+	asyncErr := appStateAsync(bluepp.Name,
+		func() {
+			//clean old application
+			err = deleteApplication(client, app.Name)
+			if err != nil {
+				close(started)
+				return
+			}
+			//rename blue application name to origin application name
+			err = renameApplication(client, bluepp.Guid, appName)
+			if err != nil {
+				close(started)
+				return
+			}
+			started <- true
+		},
+		func() {
+			err = deleteApplication(client, bluepp.Name)
+			if err != nil {
+				close(started)
+				return
+			}
+			r, err := getRoute(client, routeName, domainName)
+			if err != nil {
+				close(started)
+				return
+			}
+			if r.Host != "" {
+				err := unmappingRouteWithApplication(client, bluepp.Guid, r.Guid)
+				if err != nil {
+					close(started)
+					return
+				}
+				err = deleteAppRoute(client, r.Guid)
+				if err != nil {
+					close(started)
+					return
+				}
+			}
+			started <- true
+		})
+	<- started
+	close(started)
+	var result  = <- asyncErr
+	if result != nil {
+		return cfclient.App{}, result
 	}
-	return app, nil
+	return bluepp, nil
 }
 
 func DeleteApplcationWorkflow(appName string, instanceDir string) error{
@@ -174,6 +246,36 @@ func CheckApplicationStateWorkflow(appName string) (string, error){
 	}
 }
 
+func appStateAsync(appName string, success func(), fail func()) <-chan error{
+	successChan := make(chan bool)
+	failChan := make(chan bool)
+	errs := make(chan error, 1)
+	stateWorker := func(appName string) {
+		defer close(errs)
+		state, err := CheckApplicationStateWorkflow(appName)
+		if err != nil {
+			errs <- err
+			return
+		}
+		if state == "succeeded" {
+			successChan <- true
+		}
+		if state == "failed" {
+			failChan <- true
+		}
+	}
+	go stateWorker(appName)
+	go func() {
+		select {
+		case <- successChan :
+			success()
+		case <- failChan :
+			fail()
+		}
+	}()
+	return errs
+}
+
 func getApplicationRoutes(client *cfclient.Client, appGuid string) ([]cfclient.Route, error){
 	routes , err := client.GetAppRoutes(appGuid)
 	if err != nil {
@@ -188,6 +290,14 @@ func getDomainGuid(client *cfclient.Client, domain string) (string, error) {
 		return "", err
 	}
 	return sharedDomain.Guid, nil
+}
+
+func getDomain(client *cfclient.Client, domain string) (cfclient.SharedDomain, error){
+	sharedDomain, err := client.GetSharedDomainByName(domain)
+	if err != nil {
+		return cfclient.SharedDomain{}, err
+	}
+	return sharedDomain, nil
 }
 
 func getSpaceGuid(client *cfclient.Client, spaceName string) (string, error) {
@@ -254,6 +364,17 @@ func createRoute(client *cfclient.Client, host, domain, space string) (cfclient.
 
 func deleteAppRoute(client *cfclient.Client, routeGuid string) (error) {
 	return client.DeleteRoute(routeGuid)
+}
+
+func renameApplication (client *cfclient.Client, appGuid, newName string) error{
+	aur := cfclient.AppUpdateResource{
+		Name:           newName,
+	}
+	_, err := client.UpdateApp(appGuid, aur)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func mapRouteToApplication(client *cfclient.Client, appGuid, routeGuid string) (*cfclient.RouteMapping, error){
