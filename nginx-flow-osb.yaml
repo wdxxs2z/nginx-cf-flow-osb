@@ -1,0 +1,51 @@
+username: admin
+password: changeme
+log_level: DEBUG
+cf_api_url: http://api.local.pcfdev.io
+cf_username: admin
+cf_passwrod: admin
+service_config:
+  allow_user_provision_parameters: true
+  allow_user_update_parameters: true
+  allow_user_bind_parameters: true
+  db:
+    host: 127.0.0.1
+    port: 3306
+    username: root
+    password: 123456
+    db_name: nginx_flow_db
+    dial_timeout: 30
+    conn_max_lifetime: 36000
+    max_idle_conns: 200
+    max_open_conns: 200
+  store_data_dir: F:/nginx-store/
+  template_dir: F:/static/
+  service_space: nginx-flow-osb
+  services:
+  - id: 7eab5451-8200-4c65-982a-0f04b5a3ef6f
+    name: nginx-flow-controller
+    description: "Nginx data flow as a service"
+    bindable: true
+    plan_updatable: true
+    tags:
+    - nginx-flow
+    metadata:
+      displayName: "Nginx dataflow control the router flow"
+      imageUrl: ""
+      longDescription: "Nginx data flow control the route service"
+      providerDisplayName: "Nginx Service Broker"
+      documentationUrl: "http://nginx.com"
+      supportUrl: "https://nginx.com"
+    plans:
+    - id: 7f6ac61e-f449-4a70-8309-875c6250c1c1
+      name: stand-alone
+      description: "Free nginx data flow control"
+      bindable: true
+      free: true
+      metadata:
+        costs:
+          - amount:
+              usd: 0.0
+            unit: MONTHLY
+        bullets:
+          - shared nginx data flow
