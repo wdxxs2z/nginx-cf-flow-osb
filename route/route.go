@@ -16,7 +16,7 @@ type NginxService struct {
 type Nginx struct {
 	Name		string				`json:"name"`
 	Url		string				`json:"url"`
-	Weight          int64				`json:"weight"`
+	Weight          int				`json:"weight"`
 	Port            int				`json:"port"`
 }
 

@@ -25,7 +25,7 @@ http {
   gzip_vary on;
 
   tcp_nopush on;
-  keepalive_timeout 90;
+  keepalive_timeout 30;
   port_in_redirect off; # Ensure that redirects don't include the internal container PORT - 8080
   server_tokens off;
 
@@ -40,20 +40,27 @@ http {
       }
   {{end}}
 
-  upstream core {
-    {{range .Routes}}
-      server {{ .Url}}  weight={{ .Weight}};
+  {{ $length := len .Nginxs }} {{ if ne $length 0 }}
+  upstream {{ .ServiceId}} {
+    {{range .Nginxs}}
+      server 127.0.0.1:{{ .Port}}  weight={{ .Weight}};
     {{end}}
     keepalive 20000;
   }
-  
+  {{end}}
+
   server {
     listen 8080;
     server_name localhost;
 
     location / {
       proxy_redirect off;
-      proxy_pass http://core;
+      {{ $length := len .Nginxs }} {{ if ne $length 0 }}
+      proxy_pass http://{{ .ServiceId}};
+      {{else}}
+      root /home/vcap/app/public;
+      index index.html index.htm Default.htm;
+      {{end}}
     }
 
     location ~ /\. {

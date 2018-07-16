@@ -232,7 +232,7 @@ func (nsb *NginxDataflowServiceBroker)Update(context context.Context, instanceID
 		if err != nil {
 			return brokerapi.UpdateServiceSpec{}, err
 		}
-		if err := nsb.databaseClient.CreateServiceInstance(instanceID, details.RawParameters); err != nil {
+		if err := nsb.databaseClient.UpdateServiceInstance(instanceID, details.RawParameters); err != nil {
 			return brokerapi.UpdateServiceSpec{}, err
 		}
 	} else {
@@ -242,11 +242,161 @@ func (nsb *NginxDataflowServiceBroker)Update(context context.Context, instanceID
 }
 
 func (nsb *NginxDataflowServiceBroker) Bind(context context.Context, instanceID, bindingID string, details brokerapi.BindDetails) (brokerapi.Binding, error){
-	return brokerapi.Binding{}, fmt.Errorf("bind service broker not implement yet.")
+	nsb.logger.Debug("bind", lager.Data{
+		"instance_id":        	instanceID,
+	})
+	credentials := make(map[string]interface{})
+	service, _ := nsb.GetService(details.ServiceID)
+	if service.Name == "" {
+		return brokerapi.Binding{}, fmt.Errorf("service (%s) not found in catalog", details.ServiceID)
+	}
+	//random port generate
+	ports := make([]int, 0)
+	for i := 8001; i <= 8010; i++ {
+		ports = append(ports, i)
+	}
+	//check service instance exist
+	exist, err := nsb.databaseClient.ExistServiceInstance(instanceID)
+	if err != nil {
+		return brokerapi.Binding{}, err
+	}
+	if exist == false {
+		return brokerapi.Binding{}, fmt.Errorf("service instance (%s) already delete", instanceID)
+	}
+	//get bind service's application
+	bindAppGuid := details.AppGUID
+	bindApp, err := cfClient.GetApplicationWithGuidWorkflow(bindAppGuid)
+	if err != nil {
+		return brokerapi.Binding{}, err
+	}
+	//get service instance details form db
+	ns, err := nsb.databaseClient.GetServiceInstance(instanceID)
+	if err != nil {
+		return brokerapi.Binding{}, err
+	}
+	//get raw params |{\"name\":\"fakec\",\"url\":\"fakec.local.pcfdev.io\",\"weight\":4,\"port\":8001}|
+	if nsb.allowUserBindParameters && len(details.GetRawParameters()) >0 {
+		bindParameters := BindParameters{}
+		sourceDir := nsb.config.StoreDataDir + instanceID
+		destinationDir := nsb.config.StoreDataDir + instanceID + "/" + instanceID + ".zip"
+		if jsonErr := json.Unmarshal(details.RawParameters, &bindParameters); jsonErr != nil {
+			return brokerapi.Binding{}, jsonErr
+		}
+		bindNginx := nsb.ParseBindParameters(instanceID, bindingID, bindParameters)
+
+		//when bind url param is null
+		if bindNginx.Url == "" {
+			routes, err := cfClient.GetApplicationRouteWorkflow(bindApp.Guid)
+			if err != nil {
+				return brokerapi.Binding{}, err
+			}
+			//pick one route from application
+			if len(routes) >0 {
+				host := routes[0].Host
+				domain, err := cfClient.GetDomainWorkflow(routes[0].DomainGuid)
+				if err != nil {
+					return brokerapi.Binding{}, err
+				}
+				bindNginx.Url = host + "." + domain.Name
+				if bindNginx.Weight == 0 {
+					bindNginx.Weight = 5
+				}
+			}else {
+				return brokerapi.Binding{}, fmt.Errorf("the bind application %s has no route, and bind parameter has not set url parameter", bindApp.Name)
+			}
+		}
+		//check the origin url exist
+		for _, originNginx := range ns.Nginxs {
+			if originNginx.Url == bindNginx.Url {
+				return brokerapi.Binding{}, fmt.Errorf("the bind url(%s) has already exist in origin nginxs(%s)", bindNginx.Url, ns.Nginxs)
+			}
+		}
+		//set a port
+		for _, n := range ns.Nginxs {
+			for index, p := range ports {
+				if n.Port == p {
+					ports = append(ports[:index], ports[index+1:]...)
+					break
+				}
+			}
+		}
+		bindNginx.Port = ports[1]
+		//set weight
+		if bindNginx.Weight == 0 {
+			bindNginx.Weight = 5
+		}
+		//revert origin nginxs
+		ns.Nginxs = append(ns.Nginxs, bindNginx)
+		ns.ServiceId = instanceID
+		newRawParameters, err := json.Marshal(ns)
+		if err != nil {
+			return brokerapi.Binding{}, err
+		}
+		err = nsb.PreparePushDir(instanceID, ns)
+		if err != nil {
+			return brokerapi.Binding{}, err
+		}
+		_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, nsb.config.ServiceSpace, ns.Host, ns.Domain, sourceDir, destinationDir)
+		if err != nil {
+			return brokerapi.Binding{}, err
+		}
+		if err := nsb.databaseClient.UpdateServiceInstance(instanceID, newRawParameters); err != nil {
+			return brokerapi.Binding{}, err
+		}
+		credentials["host"] = ns.Host
+		credentials["domain"] = ns.Domain
+		credentials["nginxs"] = ns.Nginxs
+	}else {
+		return brokerapi.Binding{}, fmt.Errorf("user bind parameter must be open, now is %s", nsb.allowUserUpdateParameters)
+	}
+	return brokerapi.Binding{
+		Credentials:    credentials,
+	}, nil
 }
 
 func (nsb *NginxDataflowServiceBroker) Unbind(context context.Context, instanceID, bindingID string, details brokerapi.UnbindDetails) error {
-	return fmt.Errorf("unbind service broker not implement yet.")
+	nsb.logger.Debug("unbind", lager.Data{
+		"instance_id":        	instanceID,
+	})
+	sourceDir := nsb.config.StoreDataDir + instanceID
+	destinationDir := nsb.config.StoreDataDir + instanceID + "/" + instanceID + ".zip"
+	exist, err := nsb.databaseClient.ExistServiceInstance(instanceID)
+	if err != nil {
+		return err
+	}
+	if exist == false {
+		return fmt.Errorf("service instance (%s) already delete", instanceID)
+	}
+	//get service instance details form db
+	ns, err := nsb.databaseClient.GetServiceInstance(instanceID)
+	if err != nil {
+		return err
+	}
+	//check the bindId and url exist
+	for index, n := range ns.Nginxs {
+		if n.Name == bindingID {
+			ns.Nginxs = append(ns.Nginxs[:index], ns.Nginxs[index+1:]...)
+			break
+		}
+	}
+	//update instance
+	err = nsb.PreparePushDir(instanceID, ns)
+	if err != nil {
+		return err
+	}
+	_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, nsb.config.ServiceSpace, ns.Host, ns.Domain, sourceDir, destinationDir)
+	if err != nil {
+		return err
+	}
+	//revert database
+	newNginxParameters, err := json.Marshal(ns)
+	if err != nil {
+		return err
+	}
+	if err = nsb.databaseClient.UpdateServiceInstance(instanceID, newNginxParameters); err != nil {
+		return err
+	}
+	return nil
 }
 
 // [{"name":"fakea","url":"fakea.dcos.os","weight":4,"port":8001},{"name":"fakeb","url":"fakeb.dcos.os","weight":6,"port":8002}]
@@ -273,6 +423,21 @@ func (nsb *NginxDataflowServiceBroker)ParseParameters(instanceId string, paramet
 		}
 	}
 	return ns, nil
+}
+
+func (nsb *NginxDataflowServiceBroker)ParseBindParameters(instanceId string, bindId string,parameters map[string]interface{}) (route.Nginx) {
+	nb := route.Nginx{
+		Name:        bindId,
+	}
+	for bindKey, bindValue := range parameters {
+		if bindKey == "url" {
+			nb.Url = bindValue.(string)
+		}
+		if bindKey == "weight" {
+			nb.Weight = int(bindValue.(float64))
+		}
+	}
+	return nb
 }
 
 func (nsb *NginxDataflowServiceBroker)GetService(serviceId string) (config.Service, error) {

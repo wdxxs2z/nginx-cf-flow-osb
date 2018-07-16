@@ -84,7 +84,7 @@ func (c *DBClient) DeleteServiceInstance(serviceInstanceId string) (error) {
 	return nil
 }
 
-func (c *DBClient) UpdateServiceInstance(serviceInstanceId string, serviceDetails string) (error){
+func (c *DBClient) UpdateServiceInstance(serviceInstanceId string, serviceDetails []byte) (error){
 	c.logger.Debug("update-db-instance", lager.Data{
 		"instance_id":		serviceInstanceId,
 	})
