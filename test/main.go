@@ -1,51 +1,52 @@
 package main
 
 import (
-	"github.com/wdxxs2z/nginx-flow-osb/route"
+	"github.com/cloudfoundry-community/go-cfclient"
 	"fmt"
-	"os"
-	"path/filepath"
 	"log"
-	"encoding/json"
-	"bytes"
+	"time"
 )
 
-func main() {
+func getAppState(client *cfclient.Client, appGuid string, errChan chan error, success chan bool){
+	appStates, err := client.GetAppStats(appGuid)
+	if err != nil{
+		errChan <- err
+	}
+	s := appStates["0"].State
+	switch s {
+	case "RUNNING":
+		success <- true
+	case "STARTING":
+		getAppState(client, appGuid, errChan, success)
+		fmt.Println("starting...")
+	case "DOWN":
+		errChan <- fmt.Errorf("app down.")
+	}
+}
 
-	ns := route.NginxService{
-		ServiceId:	"64e82332-b919-4188-bb3e-14103ff0e1bd",
-		Nginxs:         make([]route.Nginx,2),
+func main() {
+	errChan := make(chan error)
+	successChan := make(chan  bool)
+	config := &cfclient.Config{
+		ApiAddress:        "https://api.local.pcfdev.io",
+		Username:          "admin",
+		Password:          "admin",
+		SkipSslValidation: true,
 	}
-	n1 := route.Nginx{
-		Name:		"fakea",
-		Url:		"fakea.dcos.os",
-		Weight:         4,
-		Port:           8001,
-	}
-	n2 := route.Nginx{
-		Name:		"fakeb",
-		Url:		"fakeb.dcos.os",
-		Weight:         6,
-		Port:           8002,
-	}
-	ns.Nginxs = []route.Nginx{n1, n2}
-	j,err := json.Marshal(ns)
+	c, err := cfclient.NewClient(config)
 	if err != nil {
 		log.Fatal(err)
 	}
-	var out bytes.Buffer
-	err = json.Indent(&out, j, "", "\t")
-	if err != nil {
-		log.Fatalln(err)
+	go getAppState(c, "fb7e12e9-6549-404c-9885-23b5b6df17c7", errChan, successChan)
+	select {
+	case <- errChan :
+		fmt.Println("err....")
+	case <- successChan :
+		fmt.Println("success...")
+	case <- time.After(time.Duration(7 * time.Second)):
+		fmt.Println("no data respose.")
 	}
-	out.WriteTo(os.Stdout)
-	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(dir)
-	err = route.ParseNginxTemplate("f:/nginx.conf.templ", ns, "f:/nginx.conf")
-	if err != nil {
-		fmt.Println(err)
-	}
+
+	close(successChan)
+	close(errChan)
 }

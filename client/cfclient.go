@@ -1,11 +1,13 @@
 package client
 
 import (
-	"github.com/cloudfoundry-community/go-cfclient"
 	"os"
 	"fmt"
-	"github.com/wdxxs2z/nginx-flow-osb/utils"
+	"time"
 	"strings"
+
+	"github.com/cloudfoundry-community/go-cfclient"
+	"github.com/wdxxs2z/nginx-flow-osb/utils"
 )
 
 func targetCFClient() (*cfclient.Client, error){
@@ -83,13 +85,11 @@ func UpdateApplicationWorkflow(appName, spaceName, routeName, domainName string,
 	}
 	//get origin application
 	originApp , err := getApplication(client, appName)
-	fmt.Sprintf("cf client, get origin app: %s", originApp.Name)
 	if err != nil {
 		return cfclient.App{}, err
 	}
 	//create a new application blue
 	blueApp, err := createApplication(client, appName + "-blue", spaceName)
-	fmt.Sprintf("cf client, create blue app: %s", blueApp.Name)
 	if err != nil {
 		return cfclient.App{}, err
 	}
@@ -104,7 +104,6 @@ func UpdateApplicationWorkflow(appName, spaceName, routeName, domainName string,
 			return cfclient.App{}, err
 		}
 	}
-	fmt.Sprintf("cf client, create blue app route: %s", blueAppRoute.Guid)
 	//mapping blue application route to blue application
 	blueAppRouteMapping, err := getMappingRoute(client, blueApp.Guid, blueAppRoute.Guid)
 	if err != nil {
@@ -116,7 +115,6 @@ func UpdateApplicationWorkflow(appName, spaceName, routeName, domainName string,
 			return cfclient.App{}, err
 		}
 	}
-	fmt.Sprintf("cf client, mapping route %s to blue application %s", blueAppRouteMapping.Guid, blueApp.Guid)
 	//upload bits to blue application
 	err = uploadApplication(client, blueApp.Guid, sourceDir, destinationZip)
 	if err != nil {
@@ -128,41 +126,34 @@ func UpdateApplicationWorkflow(appName, spaceName, routeName, domainName string,
 		return cfclient.App{}, err
 	}
 	//wait for blue application start up, close async mode
-
-	//delete origin application route mapping and not origin app exist routes
-	originRoutes, err := getApplicationRoutes(client, originApp.Guid)
-	if err != nil {
-		return cfclient.App{}, err
-	}
-	if len(originRoutes) != 0 {
-		for _, originRoute := range originRoutes {
-			err = unmappingRouteWithApplication(client, originApp.Guid, originRoute.Guid)
-			if err != nil {
-				return cfclient.App{}, err
-			}
-			originRouteMappings, err := getRouteMappingsWithRoute(client, originRoute.Guid)
-			if err != nil {
-				return cfclient.App{}, err
-			}
-			if len(originRouteMappings) == 0 {
-				err = deleteAppRoute(client, originRoute.Guid)
-				if err != nil {
-					return cfclient.App{}, err
-				}
-			}
+	errChan := make(chan error)
+	successChan := make(chan  bool)
+	timeout := time.Duration(90 * time.Second)
+	go getAppStateAsync(client, blueApp.Guid, errChan, successChan)
+	select {
+	case <- errChan :
+		//delete blue application route mapping, and routes
+		return cfclient.App{}, cleanApplicationResource(client, blueApp)
+	case <- successChan :
+		//delete origin application route mapping and not origin app exist routes
+		err = cleanApplicationResource(client, originApp)
+		if err != nil {
+			return cfclient.App{}, err
 		}
+		//rename blue application name to origin app name
+		err = renameApplication(client, blueApp.Guid, appName)
+		if err != nil {
+			return cfclient.App{}, err
+		}
+	case <- time.After(timeout):
+		if err = cleanApplicationResource(client, blueApp); err != nil {
+			return cfclient.App{}, fmt.Errorf("update blue timeout, and clean blue app cause an error: %s", err)
+		}
+		return cfclient.App{}, fmt.Errorf("get blue app(%s) state timeout(%d)", blueApp.Name, timeout)
+	}
+	defer close(successChan)
+	defer close(errChan)
 
-	}
-	//delete origin application
-	err = deleteApplication(client, originApp.Name)
-	if err != nil {
-		return cfclient.App{}, err
-	}
-	//rename blue application name to origin app name
-	err = renameApplication(client, blueApp.Guid, appName)
-	if err != nil {
-		return cfclient.App{}, err
-	}
 	return blueApp, nil
 }
 
@@ -260,10 +251,58 @@ func CheckApplicationStateWorkflow(appName string) (string, error){
 		return "succeeded", nil
 	case "STARTING":
 		return "in progress", nil
-	case "DOWN":
+	case "CRASHED":
 		return "failed", nil
 	default:
 		return "failed", nil
+	}
+}
+
+func cleanApplicationResource(client *cfclient.Client, oldApp cfclient.App) error{
+	oldRoutes, err := getApplicationRoutes(client, oldApp.Guid)
+	if err != nil {
+		return err
+	}
+	if len(oldRoutes) != 0 {
+		for _, oldRoute := range oldRoutes {
+			err = unmappingRouteWithApplication(client, oldApp.Guid, oldRoute.Guid)
+			if err != nil {
+				return err
+			}
+			oldRouteMappings, err := getRouteMappingsWithRoute(client, oldRoute.Guid)
+			if err != nil {
+				return err
+			}
+			if len(oldRouteMappings) == 0 {
+				err = deleteAppRoute(client, oldRoute.Guid)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	err = deleteApplication(client, oldApp.Name)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getAppStateAsync(client *cfclient.Client, appGuid string, errChan chan error, successChan chan bool){
+	appStates, err := client.GetAppStats(appGuid)
+	if err != nil{
+		errChan <- err
+	}
+	s := appStates["0"].State
+	switch s {
+	case "RUNNING":
+		successChan <- true
+	case "STARTING":
+		getAppStateAsync(client, appGuid, errChan, successChan)
+	case "CRASHED":
+		errChan <- fmt.Errorf("app crashed error")
+	case "DOWN":
+		getAppStateAsync(client, appGuid, errChan, successChan)
 	}
 }
 
