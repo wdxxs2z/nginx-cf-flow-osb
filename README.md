@@ -4,6 +4,21 @@ Platform support: only cloudfoundry (k8s has integrate with istio, so balabala..
 
 When the nginx proxy application update, we will start a new blue application,and wait the application state become running,then delete origin app.</br>
 
+### Start nginx service localhost
+
+ginx-flow-osb -config nginx-flow-osb.yaml
+
+| Yaml arameter          | Description                            | Default                   |
+| ----------------------- | -------------------------------------- | ------------------------- |
+| `cf_api_url`|The cloud foundry api url|"https://api.local.pcfdev.io"|
+| `cf_username`|The cloud foundry api username|"admin"|
+| `cf_passwrod`|The cloud foundry api password |"admin"|
+| `service_config.db`|Mysql database configuration|"db"|
+| `store_data_dir`|The nginx service instance store data dir|""|
+| `template_dir`|The nginx static template store data dir|""|
+| `service_space`|Under the system org, default nginx service space instance|"nginx-flow-osb"|
+| `plan.use_system_space`|The plan open system space service instance|true/false|
+
 ### Create nginx service instance with two parameters
 
 **host:** the nginx global host name </br>

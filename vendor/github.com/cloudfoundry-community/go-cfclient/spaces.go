@@ -590,6 +590,7 @@ func (c *Client) GetSpaceByName(spaceName string, orgGuid string) (space Space, 
 	if err != nil {
 		return
 	}
+
 	if len(spaces) == 0 {
 		return space, fmt.Errorf("No space found with name: `%s` in org with GUID: `%s`", spaceName, orgGuid)
 	}
