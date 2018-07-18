@@ -8,6 +8,7 @@ import (
 	"strings"
 	"net/http"
 	"encoding/json"
+	_ "net/http/pprof"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/handlers"
@@ -24,6 +25,8 @@ import (
 type ProvisionParameters map[string]interface{}
 
 type BindParameters map[string]interface{}
+
+type RequestContext map[string]string
 
 type NginxDataflowServiceBroker struct {
 	allowUserProvisionParameters 	bool
@@ -135,11 +138,25 @@ func (nsb *NginxDataflowServiceBroker)Provision(context context.Context, instanc
 		if err != nil {
 			return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("prepare push director err: %s", err)
 		}
-		_, err = cfClient.CreateApplicationWorkflow("nginx-flow-" + instanceID, nsb.config.ServiceSpace, ns.Host, ns.Domain, sourceDir, destinationDir)
+		var spaceName string
+		plan, err := nsb.GetPlan(service.Id, details.PlanID)
+		if err != nil {
+			return brokerapi.ProvisionedServiceSpec{}, err
+		}
+		if plan.EnableSystemSpace {
+			spaceName = nsb.config.ServiceSpace
+		} else {
+			space, err := cfClient.GetSpaceWorkflow(details.SpaceGUID)
+			if err != nil {
+				return brokerapi.ProvisionedServiceSpec{}, err
+			}
+			spaceName = space.Name
+		}
+		_, err = cfClient.CreateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir)
 		if err != nil {
 			return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("create application err: %s", err)
 		}
-		if err := nsb.databaseClient.CreateServiceInstance(instanceID, details.RawParameters); err != nil {
+		if err := nsb.databaseClient.CreateServiceInstance(instanceID, details.RawParameters, details.SpaceGUID); err != nil {
 			return brokerapi.ProvisionedServiceSpec{}, err
 		}
 	} else {
@@ -205,6 +222,10 @@ func (nsb *NginxDataflowServiceBroker)Update(context context.Context, instanceID
 	nsb.logger.Debug("update", lager.Data{
 		"instance_id":        	instanceID,
 	})
+	service, _ := nsb.GetService(details.ServiceID)
+	if service.Name == "" {
+		return brokerapi.UpdateServiceSpec{}, fmt.Errorf("service (%s) not found in catalog", details.ServiceID)
+	}
 	exist, err := nsb.databaseClient.ExistServiceInstance(instanceID)
 	if err != nil {
 		return brokerapi.UpdateServiceSpec{}, err
@@ -228,7 +249,21 @@ func (nsb *NginxDataflowServiceBroker)Update(context context.Context, instanceID
 		if err != nil {
 			return brokerapi.UpdateServiceSpec{}, err
 		}
-		_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, nsb.config.ServiceSpace, ns.Host, ns.Domain, sourceDir, destinationDir)
+		var spaceName string
+		plan, err := nsb.GetPlan(service.Id, details.PlanID)
+		if err != nil {
+			return brokerapi.UpdateServiceSpec{}, err
+		}
+		if plan.EnableSystemSpace {
+			spaceName = nsb.config.ServiceSpace
+		} else {
+			space, err := cfClient.GetSpaceWorkflow(details.PreviousValues.SpaceID)
+			if err != nil {
+				return brokerapi.UpdateServiceSpec{}, err
+			}
+			spaceName = space.Name
+		}
+		_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir)
 		if err != nil {
 			return brokerapi.UpdateServiceSpec{}, err
 		}
@@ -336,7 +371,25 @@ func (nsb *NginxDataflowServiceBroker) Bind(context context.Context, instanceID,
 		if err != nil {
 			return brokerapi.Binding{}, err
 		}
-		_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, nsb.config.ServiceSpace, ns.Host, ns.Domain, sourceDir, destinationDir)
+		var spaceName string
+		plan, err := nsb.GetPlan(service.Id, details.PlanID)
+		if err != nil {
+			return brokerapi.Binding{}, err
+		}
+		if plan.EnableSystemSpace {
+			spaceName = nsb.config.ServiceSpace
+		} else {
+			requestContext := RequestContext{}
+			if err = json.Unmarshal(details.RawContext, &requestContext); err != nil {
+				return brokerapi.Binding{}, err
+			}
+			space, err := cfClient.GetSpaceWorkflow(requestContext["space_guid"])
+			if err != nil {
+				return brokerapi.Binding{}, err
+			}
+			spaceName = space.Name
+		}
+		_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir)
 		if err != nil {
 			return brokerapi.Binding{}, err
 		}
@@ -358,6 +411,10 @@ func (nsb *NginxDataflowServiceBroker) Unbind(context context.Context, instanceI
 	nsb.logger.Debug("unbind", lager.Data{
 		"instance_id":        	instanceID,
 	})
+	service, _ := nsb.GetService(details.ServiceID)
+	if service.Name == "" {
+		return fmt.Errorf("service (%s) not found in catalog", details.ServiceID)
+	}
 	sourceDir := nsb.config.StoreDataDir + instanceID
 	destinationDir := nsb.config.StoreDataDir + instanceID + "/" + instanceID + ".zip"
 	exist, err := nsb.databaseClient.ExistServiceInstance(instanceID)
@@ -384,7 +441,25 @@ func (nsb *NginxDataflowServiceBroker) Unbind(context context.Context, instanceI
 	if err != nil {
 		return err
 	}
-	_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, nsb.config.ServiceSpace, ns.Host, ns.Domain, sourceDir, destinationDir)
+	var spaceName string
+	plan, err := nsb.GetPlan(service.Id, details.PlanID)
+	if err != nil {
+		return err
+	}
+	if plan.EnableSystemSpace {
+		spaceName = nsb.config.ServiceSpace
+	} else {
+		spaceId, err := nsb.databaseClient.GetSpaceWithServiceId(instanceID)
+		if err != nil {
+			return err
+		}
+		space, err := cfClient.GetSpaceWorkflow(spaceId)
+		if err != nil {
+			return err
+		}
+		spaceName = space.Name
+	}
+	_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir)
 	if err != nil {
 		return err
 	}

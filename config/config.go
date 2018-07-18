@@ -51,11 +51,11 @@ type Plan struct {
 	Description 		string 			`yaml:"description"`
 	Free        		*bool 			`yaml:"free"`
 	Bindable    		*bool			`yaml:"bindable"`
+	EnableSystemSpace       bool                    `yaml:"use_system_space"`
 	Metadata    		PlanMetadata		`yaml:"metadata"`
 }
 
 type PlanMetadata struct {
-
 	Costs    		[]Cost			`yaml:"costs"`
 	Bullets  		[]string		`yaml:"bullets"`
 }

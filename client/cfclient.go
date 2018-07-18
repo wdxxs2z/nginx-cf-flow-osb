@@ -27,6 +27,14 @@ func targetCFClient() (*cfclient.Client, error){
 	return client, err
 }
 
+func GetSpaceWorkflow(spaceGuid string)(cfclient.Space,error){
+	client, err := targetCFClient()
+	if err != nil {
+		return cfclient.Space{}, err
+	}
+	return client.GetSpaceByGuid(spaceGuid)
+}
+
 func CreateApplicationWorkflow(appName, spaceName, routeName, domain string, sourceDir string, destinationZip string) (cfclient.App, error){
 	client, err := targetCFClient()
 	if err != nil {

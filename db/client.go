@@ -46,6 +46,7 @@ func (c *DBClient) MigrateServiceInstanceTable() error {
 		"id int NOT NULL AUTO_INCREMENT, PRIMARY KEY (id)" +
 		", service_instance_id varchar(42) NOT NULL" +
 		", service_instance_details BLOB NOT NULL" +
+		", space_id varchar(42) NOT NULL" +
                 ");"
 	_, err := c.client.Exec(baseCreateTable)
 	return err
@@ -62,11 +63,11 @@ func (c *DBClient) ExistServiceInstance(serviceInstanceId string) (bool, error){
 	return exist, nil
 }
 
-func (c *DBClient) CreateServiceInstance(serviceInstanceId string, serviceDetails []byte) (error) {
+func (c *DBClient) CreateServiceInstance(serviceInstanceId string, serviceDetails []byte, spaceGuid string) (error) {
 	c.logger.Debug("create-db-instance", lager.Data{
 		"instance_id":		serviceInstanceId,
 	})
-	_, err := c.client.Exec("INSERT INTO service_instance(service_instance_id,service_instance_details) VALUES(?,?)", serviceInstanceId, serviceDetails)
+	_, err := c.client.Exec("INSERT INTO service_instance(service_instance_id,service_instance_details,space_id) VALUES(?,?,?)", serviceInstanceId, serviceDetails, spaceGuid)
 	if err != nil {
 		return err
 	}
@@ -82,6 +83,17 @@ func (c *DBClient) DeleteServiceInstance(serviceInstanceId string) (error) {
 		return err
 	}
 	return nil
+}
+
+func (c *DBClient) GetSpaceWithServiceId(serviceInstanceId string) (string, error) {
+	c.logger.Debug("get-db-space-with-service", lager.Data{
+		"instance_id":		serviceInstanceId,
+	})
+	var spaceId string
+	if err := c.client.QueryRow("SELECT space_id FROM service_instance WHERE service_instance_id = ?", serviceInstanceId).Scan(&spaceId); err != nil {
+		return "", err
+	}
+	return spaceId, nil
 }
 
 func (c *DBClient) UpdateServiceInstance(serviceInstanceId string, serviceDetails []byte) (error){

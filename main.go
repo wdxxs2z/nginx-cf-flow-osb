@@ -7,6 +7,8 @@ import (
 	"strings"
 	"log"
 	"os"
+	"net/http"
+	_"net/http/pprof"
 )
 
 var (
@@ -54,6 +56,13 @@ func main() {
 	os.Setenv("CF_API", config.CloudFoundryApi)
 	os.Setenv("CF_USERNAME", config.CloudFoundryUsername)
 	os.Setenv("CF_PASSWORD", config.CloudFoundryPassword)
+
+	logger.Debug("enable debug mode", lager.Data{
+		"listen": "127.0.0.1:9999",
+	})
+	go func() {
+		log.Println(http.ListenAndServe("localhost:9999", nil))
+	}()
 
 	broker := broker.New(config.ServiceConfig, logger)
 	broker.Run(":" + port)

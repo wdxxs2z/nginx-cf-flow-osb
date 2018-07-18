@@ -38,10 +38,11 @@ service_config:
       supportUrl: "https://nginx.com"
     plans:
     - id: 7f6ac61e-f449-4a70-8309-875c6250c1c1
-      name: stand-alone
-      description: "Free nginx data flow control"
+      name: free
+      description: "Free nginx data flow control with system space manage"
       bindable: true
       free: true
+      use_system_space: true
       metadata:
         costs:
           - amount:
@@ -49,3 +50,18 @@ service_config:
             unit: MONTHLY
         bullets:
           - shared nginx data flow
+          - system manage
+    - id: 187dd7b3-4f6e-4e15-a845-1682fd9ea95b
+      name: app-space-first
+      description: "Free nginx data flow control with yourself space manage"
+      bindable: true
+      free: true
+      use_system_space: false
+      metadata:
+        costs:
+          - amount:
+              usd: 0.0
+            unit: MONTHLY
+        bullets:
+          - shared nginx data flow
+          - self manage
