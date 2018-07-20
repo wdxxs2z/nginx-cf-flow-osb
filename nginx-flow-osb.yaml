@@ -18,8 +18,8 @@ service_config:
     conn_max_lifetime: 36000
     max_idle_conns: 200
     max_open_conns: 200
-  store_data_dir: F:/nginx-store/
-  template_dir: F:/static/
+  store_data_dir: /home/vcap/app/
+  template_dir: /home/vcap/app/static/
   service_space: nginx-flow-osb
   per_nginx_backend_instance_num: 10
   services:

@@ -1,0 +1,10 @@
+---
+applications:
+ - name: nginx-service-broker
+   command: nginx-flow-osb -config nginx-flow-osb.yaml
+   buildpack: go_buildpack
+   path: .
+   env:
+     GOVERSION: go1.8.1
+     GOPACKAGENAME: github.com/wdxxs2z/nginx-flow-osb
+     DATABASE_HOST: 192.168.11.1

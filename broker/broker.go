@@ -310,15 +310,19 @@ func (nsb *NginxDataflowServiceBroker) Bind(context context.Context, instanceID,
 		return brokerapi.Binding{}, err
 	}
 	//get raw params |{\"name\":\"fakec\",\"url\":\"fakec.local.pcfdev.io\",\"weight\":4,\"port\":8001}|
-	if nsb.allowUserBindParameters && len(details.GetRawParameters()) >0 {
+	if nsb.allowUserBindParameters {
 		bindParameters := BindParameters{}
+		var bindNginx route.Nginx
 		sourceDir := nsb.config.StoreDataDir + instanceID
 		destinationDir := nsb.config.StoreDataDir + instanceID + "/" + instanceID + ".zip"
-		if jsonErr := json.Unmarshal(details.RawParameters, &bindParameters); jsonErr != nil {
-			return brokerapi.Binding{}, jsonErr
+		if len(details.GetRawParameters()) >0 {
+			if jsonErr := json.Unmarshal(details.RawParameters, &bindParameters); jsonErr != nil {
+				return brokerapi.Binding{}, jsonErr
+			}
+			bindNginx = nsb.ParseBindParameters(instanceID, bindingID, bindParameters)
+		}else {
+			bindNginx.Name = bindingID
 		}
-		bindNginx := nsb.ParseBindParameters(instanceID, bindingID, bindParameters)
-
 		//when bind url param is null
 		if bindNginx.Url == "" {
 			routes, err := cfClient.GetApplicationRouteWorkflow(bindApp.Guid, nsb.logger)
@@ -549,7 +553,7 @@ func (nsb *NginxDataflowServiceBroker)PreparePushDir(instanceID string, ns route
 			return err
 		}
 	}
-	mkdirErr := os.Mkdir(pushDir, os.FileMode(666))
+	mkdirErr := os.Mkdir(pushDir, os.FileMode(0777))
 	if mkdirErr != nil {
 		return mkdirErr
 	}
@@ -565,7 +569,7 @@ func (nsb *NginxDataflowServiceBroker)PreparePushDir(instanceID string, ns route
 }
 
 func servicePlans(plans []config.Plan) []brokerapi.ServicePlan {
-	servicePlans := make([]brokerapi.ServicePlan, len(plans)-1)
+	servicePlans := make([]brokerapi.ServicePlan, 0)
 	for _,servicePlan := range plans {
 		servicePlans = append(servicePlans, brokerapi.ServicePlan{
 			ID:		servicePlan.Id,
