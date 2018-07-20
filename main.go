@@ -1,14 +1,16 @@
 package main
 
 import (
-	"github.com/wdxxs2z/nginx-flow-osb/broker"
-	"code.cloudfoundry.org/lager"
+	"os"
+	"log"
 	"flag"
 	"strings"
-	"log"
-	"os"
 	"net/http"
 	_"net/http/pprof"
+
+	"code.cloudfoundry.org/lager"
+
+	"github.com/wdxxs2z/nginx-flow-osb/broker"
 )
 
 var (

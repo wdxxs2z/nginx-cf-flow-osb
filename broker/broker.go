@@ -61,7 +61,7 @@ func New(config config.Config, logger lager.Logger) *NginxDataflowServiceBroker{
 	brokerapi.AttachRoutes(broker.brokerRouter, broker, logger)
 	liveness := broker.brokerRouter.HandleFunc("/liveness", livenessHandler).Methods(http.MethodGet)
 
-	broker.brokerRouter.Use(authHandler(config, map[*mux.Route]bool{liveness: true}))
+	broker.brokerRouter.Use(authHandler(map[*mux.Route]bool{liveness: true}))
 	broker.brokerRouter.Use(handlers.ProxyHeaders)
 	broker.brokerRouter.Use(handlers.CompressHandler)
 	broker.brokerRouter.Use(handlers.CORS(
@@ -146,13 +146,13 @@ func (nsb *NginxDataflowServiceBroker)Provision(context context.Context, instanc
 		if plan.EnableSystemSpace {
 			spaceName = nsb.config.ServiceSpace
 		} else {
-			space, err := cfClient.GetSpaceWorkflow(details.SpaceGUID)
+			space, err := cfClient.GetSpaceWorkflow(details.SpaceGUID, nsb.logger)
 			if err != nil {
 				return brokerapi.ProvisionedServiceSpec{}, err
 			}
 			spaceName = space.Name
 		}
-		_, err = cfClient.CreateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir)
+		_, err = cfClient.CreateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir, nsb.logger)
 		if err != nil {
 			return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("create application err: %s", err)
 		}
@@ -178,7 +178,7 @@ func (nsb *NginxDataflowServiceBroker)Deprovision(context context.Context, insta
 	if err != nil {
 		return brokerapi.DeprovisionServiceSpec{}, err
 	}
-	app, err := cfClient.GetApplicationWorkflow("nginx-flow-" + instanceID)
+	app, err := cfClient.GetApplicationWorkflow("nginx-flow-" + instanceID, nsb.logger)
 	if err != nil {
 		return brokerapi.DeprovisionServiceSpec{}, err
 	}
@@ -190,14 +190,14 @@ func (nsb *NginxDataflowServiceBroker)Deprovision(context context.Context, insta
 			return brokerapi.DeprovisionServiceSpec{}, err
 		}
 	} else if exist == false && app.Name != "" {
-		if err := cfClient.DeleteApplcationWorkflow("nginx-flow-" + instanceID, instanceDir); err != nil {
+		if err := cfClient.DeleteApplcationWorkflow("nginx-flow-" + instanceID, instanceDir, nsb.logger); err != nil {
 			return brokerapi.DeprovisionServiceSpec{}, err
 		}
 	} else {
 		if err := nsb.databaseClient.DeleteServiceInstance(instanceID); err != nil {
 			return brokerapi.DeprovisionServiceSpec{}, err
 		}
-		if err := cfClient.DeleteApplcationWorkflow("nginx-flow-" + instanceID, instanceDir); err != nil {
+		if err := cfClient.DeleteApplcationWorkflow("nginx-flow-" + instanceID, instanceDir, nsb.logger); err != nil {
 			return brokerapi.DeprovisionServiceSpec{}, err
 		}
 	}
@@ -208,7 +208,7 @@ func (nsb *NginxDataflowServiceBroker) LastOperation(context context.Context, in
 	nsb.logger.Debug("last-operation", lager.Data{
 		"instanceId": instanceID,
 	})
-	state, err := cfClient.CheckApplicationStateWorkflow("nginx-flow-" + instanceID)
+	state, err := cfClient.CheckApplicationStateWorkflow("nginx-flow-" + instanceID, nsb.logger)
 	if err != nil {
 		return brokerapi.LastOperation{}, err
 	}
@@ -257,13 +257,13 @@ func (nsb *NginxDataflowServiceBroker)Update(context context.Context, instanceID
 		if plan.EnableSystemSpace {
 			spaceName = nsb.config.ServiceSpace
 		} else {
-			space, err := cfClient.GetSpaceWorkflow(details.PreviousValues.SpaceID)
+			space, err := cfClient.GetSpaceWorkflow(details.PreviousValues.SpaceID, nsb.logger)
 			if err != nil {
 				return brokerapi.UpdateServiceSpec{}, err
 			}
 			spaceName = space.Name
 		}
-		_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir)
+		_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir, nsb.logger)
 		if err != nil {
 			return brokerapi.UpdateServiceSpec{}, err
 		}
@@ -287,7 +287,7 @@ func (nsb *NginxDataflowServiceBroker) Bind(context context.Context, instanceID,
 	}
 	//random port generate
 	ports := make([]int, 0)
-	for i := 8001; i <= 8010; i++ {
+	for i := 8001; i <= 8001 + nsb.config.NginxBackendInstanceNum ; i++ {
 		ports = append(ports, i)
 	}
 	//check service instance exist
@@ -300,7 +300,7 @@ func (nsb *NginxDataflowServiceBroker) Bind(context context.Context, instanceID,
 	}
 	//get bind service's application
 	bindAppGuid := details.AppGUID
-	bindApp, err := cfClient.GetApplicationWithGuidWorkflow(bindAppGuid)
+	bindApp, err := cfClient.GetApplicationWithGuidWorkflow(bindAppGuid, nsb.logger)
 	if err != nil {
 		return brokerapi.Binding{}, err
 	}
@@ -321,14 +321,14 @@ func (nsb *NginxDataflowServiceBroker) Bind(context context.Context, instanceID,
 
 		//when bind url param is null
 		if bindNginx.Url == "" {
-			routes, err := cfClient.GetApplicationRouteWorkflow(bindApp.Guid)
+			routes, err := cfClient.GetApplicationRouteWorkflow(bindApp.Guid, nsb.logger)
 			if err != nil {
 				return brokerapi.Binding{}, err
 			}
 			//pick one route from application
 			if len(routes) >0 {
 				host := routes[0].Host
-				domain, err := cfClient.GetDomainWorkflow(routes[0].DomainGuid)
+				domain, err := cfClient.GetDomainWorkflow(routes[0].DomainGuid, nsb.logger)
 				if err != nil {
 					return brokerapi.Binding{}, err
 				}
@@ -383,13 +383,13 @@ func (nsb *NginxDataflowServiceBroker) Bind(context context.Context, instanceID,
 			if err = json.Unmarshal(details.RawContext, &requestContext); err != nil {
 				return brokerapi.Binding{}, err
 			}
-			space, err := cfClient.GetSpaceWorkflow(requestContext["space_guid"])
+			space, err := cfClient.GetSpaceWorkflow(requestContext["space_guid"], nsb.logger)
 			if err != nil {
 				return brokerapi.Binding{}, err
 			}
 			spaceName = space.Name
 		}
-		_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir)
+		_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir, nsb.logger)
 		if err != nil {
 			return brokerapi.Binding{}, err
 		}
@@ -453,13 +453,13 @@ func (nsb *NginxDataflowServiceBroker) Unbind(context context.Context, instanceI
 		if err != nil {
 			return err
 		}
-		space, err := cfClient.GetSpaceWorkflow(spaceId)
+		space, err := cfClient.GetSpaceWorkflow(spaceId, nsb.logger)
 		if err != nil {
 			return err
 		}
 		spaceName = space.Name
 	}
-	_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir)
+	_, err = cfClient.UpdateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir, nsb.logger)
 	if err != nil {
 		return err
 	}
@@ -587,7 +587,7 @@ func livenessHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("{}"))
 }
 
-func authHandler(config config.Config, noAuthRequired map[*mux.Route]bool) mux.MiddlewareFunc{
+func authHandler(noAuthRequired map[*mux.Route]bool) mux.MiddlewareFunc{
 	validCredentials := func(r *http.Request) bool {
 		if noAuthRequired[mux.CurrentRoute(r)] {
 			return true

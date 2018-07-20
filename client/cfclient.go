@@ -8,6 +8,7 @@ import (
 
 	"github.com/cloudfoundry-community/go-cfclient"
 	"github.com/wdxxs2z/nginx-flow-osb/utils"
+	"code.cloudfoundry.org/lager"
 )
 
 func targetCFClient() (*cfclient.Client, error){
@@ -27,7 +28,10 @@ func targetCFClient() (*cfclient.Client, error){
 	return client, err
 }
 
-func GetSpaceWorkflow(spaceGuid string)(cfclient.Space,error){
+func GetSpaceWorkflow(spaceGuid string, logger lager.Logger)(cfclient.Space,error){
+	logger.Debug("fetch-cloudfoundry-space-workflow", lager.Data{
+		"space_guid":    spaceGuid,
+	})
 	client, err := targetCFClient()
 	if err != nil {
 		return cfclient.Space{}, err
@@ -35,7 +39,12 @@ func GetSpaceWorkflow(spaceGuid string)(cfclient.Space,error){
 	return client.GetSpaceByGuid(spaceGuid)
 }
 
-func CreateApplicationWorkflow(appName, spaceName, routeName, domain string, sourceDir string, destinationZip string) (cfclient.App, error){
+func CreateApplicationWorkflow(appName, spaceName, routeName, domain string, sourceDir string, destinationZip string, logger lager.Logger) (cfclient.App, error){
+	logger.Debug("create-cloudfoundry-application-workflow", lager.Data{
+		"app_name":    appName,
+		"route_name":  routeName,
+		"domain_name": domain,
+	})
 	client, err := targetCFClient()
 	if err != nil {
 		return cfclient.App{}, err
@@ -86,7 +95,12 @@ func CreateApplicationWorkflow(appName, spaceName, routeName, domain string, sou
 	return app, nil
 }
 
-func UpdateApplicationWorkflow(appName, spaceName, routeName, domainName string, sourceDir string, destinationZip string) (cfclient.App, error){
+func UpdateApplicationWorkflow(appName, spaceName, routeName, domainName string, sourceDir string, destinationZip string, logger lager.Logger) (cfclient.App, error){
+	logger.Debug("update-cloudfoundry-application-workflow", lager.Data{
+		"app_name":    appName,
+		"route_name":  routeName,
+		"domain_name": domainName,
+	})
 	client, err := targetCFClient()
 	if err != nil {
 		return cfclient.App{}, err
@@ -165,7 +179,10 @@ func UpdateApplicationWorkflow(appName, spaceName, routeName, domainName string,
 	return blueApp, nil
 }
 
-func DeleteApplcationWorkflow(appName string, instanceDir string) error{
+func DeleteApplcationWorkflow(appName string, instanceDir string, logger lager.Logger) error{
+	logger.Debug("delete-cloudfoundry-application-workflow", lager.Data{
+		"app_name":    appName,
+	})
 	client, err := targetCFClient()
 	if err != nil {
 		return err
@@ -195,7 +212,10 @@ func DeleteApplcationWorkflow(appName string, instanceDir string) error{
 	return deleteApplication(client, app.Name)
 }
 
-func GetApplicationWorkflow(appName string) (cfclient.App, error){
+func GetApplicationWorkflow(appName string, logger lager.Logger) (cfclient.App, error){
+	logger.Debug("fetch-cloudfoundry-application-workflow", lager.Data{
+		"app_name":    appName,
+	})
 	client, err := targetCFClient()
 	if err != nil {
 		return cfclient.App{}, err
@@ -207,7 +227,10 @@ func GetApplicationWorkflow(appName string) (cfclient.App, error){
 	return app, nil
 }
 
-func GetApplicationWithGuidWorkflow(appGuid string) (cfclient.App, error){
+func GetApplicationWithGuidWorkflow(appGuid string, logger lager.Logger) (cfclient.App, error){
+	logger.Debug("fetch-cloudfoundry-application-guid-workflow", lager.Data{
+		"app_guid":    appGuid,
+	})
 	client, err := targetCFClient()
 	if err != nil {
 		return cfclient.App{}, err
@@ -215,7 +238,10 @@ func GetApplicationWithGuidWorkflow(appGuid string) (cfclient.App, error){
 	return client.GetAppByGuid(appGuid)
 }
 
-func GetApplicationRouteWorkflow(appGuid string) ([]cfclient.Route, error) {
+func GetApplicationRouteWorkflow(appGuid string, logger lager.Logger) ([]cfclient.Route, error) {
+	logger.Debug("fetch-cloudfoundry-application--route-workflow", lager.Data{
+		"app_guid":	appGuid,
+	})
 	client, err := targetCFClient()
 	if err != nil {
 		return []cfclient.Route{}, err
@@ -223,7 +249,10 @@ func GetApplicationRouteWorkflow(appGuid string) ([]cfclient.Route, error) {
 	return getApplicationRoutes(client, appGuid)
 }
 
-func GetDomainWorkflow(domainGuid string) (cfclient.SharedDomain, error){
+func GetDomainWorkflow(domainGuid string, logger lager.Logger) (cfclient.SharedDomain, error){
+	logger.Debug("fetch-cloudfoundry-domain-workflow", lager.Data{
+		"domain_guid":    domainGuid,
+	})
 	client, err := targetCFClient()
 	if err != nil {
 		return cfclient.SharedDomain{}, err
@@ -240,7 +269,10 @@ func GetDomainWorkflow(domainGuid string) (cfclient.SharedDomain, error){
 	return cfclient.SharedDomain{}, fmt.Errorf("domain not found with %s", domainGuid)
 }
 
-func CheckApplicationStateWorkflow(appName string) (string, error){
+func CheckApplicationStateWorkflow(appName string, logger lager.Logger) (string, error){
+	logger.Debug("check-cloudfoundry-application-state-workflow", lager.Data{
+		"app_name":    appName,
+	})
 	client, err := targetCFClient()
 	if err != nil {
 		return "failed", err

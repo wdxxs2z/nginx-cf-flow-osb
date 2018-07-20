@@ -5,6 +5,7 @@ type Config struct {
 	AllowUserUpdateParameters    bool    		`yaml:"allow_user_update_parameters"`
 	AllowUserBindParameters      bool               `yaml:"allow_user_bind_parameters"`
 	DatabaseConfig               DB                 `yaml:"db"`
+	NginxBackendInstanceNum      int                `yaml:"per_nginx_backend_instance_num"`
 	StoreDataDir		     string		`yaml:"store_data_dir"`
 	TemplateDir                  string             `yaml:"template_dir"`
 	ServiceSpace                 string             `yaml:"service_space"`

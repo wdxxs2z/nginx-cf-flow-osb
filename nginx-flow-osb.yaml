@@ -21,6 +21,7 @@ service_config:
   store_data_dir: F:/nginx-store/
   template_dir: F:/static/
   service_space: nginx-flow-osb
+  per_nginx_backend_instance_num: 10
   services:
   - id: 7eab5451-8200-4c65-982a-0f04b5a3ef6f
     name: nginx-flow-controller
