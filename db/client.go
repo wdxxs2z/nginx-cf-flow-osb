@@ -9,6 +9,7 @@ import (
 	"time"
 	"encoding/json"
 	"github.com/wdxxs2z/nginx-flow-osb/route"
+	"os"
 )
 
 type DBClient struct {
@@ -17,13 +18,17 @@ type DBClient struct {
 }
 
 func NewDBClient(config config.Config, logger lager.Logger) (*DBClient, error) {
-	databaseConfig := config.DatabaseConfig
+	dbName := os.Getenv("DATABASE_NAME")
+	dbUsername := os.Getenv("DATABASE_USERNAME")
+	dbPassword := os.Getenv("DATABASE_PASSWORD")
+	dbHost := os.Getenv("DATABASE_HOST")
+	dbPort := os.Getenv("DATABASE_PORT")
 	logger.Debug("init-database", lager.Data{
-		"host": 	databaseConfig.Host,
-		"port":		databaseConfig.Port,
-		"username":    databaseConfig.Username,
+		"host": 	dbHost,
+		"port":		dbPort,
+		"username":    dbUsername,
 	})
-	dataSourceName := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8&timeout=%ds", databaseConfig.Username, databaseConfig.Password, databaseConfig.Host, databaseConfig.Port, databaseConfig.DbName, databaseConfig.DialTimeout)
+	dataSourceName := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&timeout=%ds", dbUsername, dbPassword, dbHost, dbPort, dbName, config.DatabaseConfig.DialTimeout)
 	dbClient, err := sql.Open("mysql", dataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to log mysql: %s", err)
@@ -32,9 +37,9 @@ func NewDBClient(config config.Config, logger lager.Logger) (*DBClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to ping mysql: %s", err)
 	}
-	dbClient.SetMaxOpenConns(databaseConfig.MaxOpenConns)
-	dbClient.SetMaxIdleConns(databaseConfig.MaxIdleConns)
-	dbClient.SetConnMaxLifetime(time.Duration(databaseConfig.ConnMaxLifetime) * time.Hour)
+	dbClient.SetMaxOpenConns(config.DatabaseConfig.MaxOpenConns)
+	dbClient.SetMaxIdleConns(config.DatabaseConfig.MaxIdleConns)
+	dbClient.SetConnMaxLifetime(time.Duration(config.DatabaseConfig.ConnMaxLifetime) * time.Hour)
 	return &DBClient{
 		client:		dbClient,
 		logger:         logger,
