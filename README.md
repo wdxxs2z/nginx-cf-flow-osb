@@ -19,10 +19,27 @@ ginx-flow-osb -config nginx-flow-osb.yaml
 | `service_space`|Under the system org, default nginx service space instance|"nginx-flow-osb"|
 | `plan.use_system_space`|The plan open system space service instance|true/false|
 
+### Service broker environment
+| ENV NAME          | Description                            |
+| ----------------------- | -------------------------------------- |
+| `CF_API`|Cloud foundry api url|
+| `CF_USERNAME`|Cloud foundry user|
+| `CF_PASSWORD`|Cloud foundry password|
+| `DATABASE_NAME`|Mysql database name|
+| `DATABASE_USERNAME`|Mysql database username|
+| `DATABASE_HOST`|Mysql database host|
+| `DATABASE_PORT`|Mysql database port|
+| `DATABASE_PASSWORD`|Mysql database user password|
+
+### Register the service broker to cloudfoundry
+
+cf create-service-broker nginx-osb admin admin http://nginx-service-broker.local.pcfdev.io</br>
+cf enable-service-access nginx-osb
+
 ### Create nginx service instance with two parameters
 
-**host:** the nginx global host name </br>
-**domain:** the application shared domain </br>
+**host:** the nginx global host name (requred)</br>
+**domain:** the application shared domain (requred)</br>
 
 **curl:** http://127.0.0.1:8080/v2/service_instances/${service_instance_guid} </br>
 
