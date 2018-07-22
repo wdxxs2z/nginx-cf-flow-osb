@@ -8,6 +8,8 @@ When the nginx proxy application update, we will start a new blue application,an
 
 ginx-flow-osb -config nginx-flow-osb.yaml
 
+**service_instance_space:** must create org: system and space: nginx-flow-osb
+
 | Yaml arameter          | Description                            | Default                   |
 | ----------------------- | -------------------------------------- | ------------------------- |
 | `cf_api_url`|The cloud foundry api url|"https://api.local.pcfdev.io"|

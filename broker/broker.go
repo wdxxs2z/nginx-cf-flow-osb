@@ -123,7 +123,10 @@ func (nsb *NginxDataflowServiceBroker)Provision(context context.Context, instanc
 	if exist == true {
 		return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("service instance (%s) already created", instanceID)
 	}
-	if nsb.allowUserProvisionParameters && len(details.GetRawParameters()) >0 {
+	if nsb.allowUserProvisionParameters {
+		if len(details.GetRawParameters()) <= 2 {
+			return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("service instance must content host(host:'%s') and domain(domain:'%s') parameters", "fake", "local.pcfdev.io")
+		}
 		provisionParameters := ProvisionParameters{}
 		sourceDir := nsb.config.StoreDataDir + instanceID
 		destinationDir := nsb.config.StoreDataDir + instanceID + "/" + instanceID + ".zip"
