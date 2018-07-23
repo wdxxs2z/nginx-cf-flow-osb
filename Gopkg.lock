@@ -26,6 +26,12 @@
   revision = "4d0c80011a0f37da1711c184028bc40137cd45af"
 
 [[projects]]
+  name = "github.com/dmcgowan/msgpack"
+  packages = ["."]
+  revision = "6004e761984b4c5abbb5afe154e523b4a3ad3d40"
+  version = "v2.0"
+
+[[projects]]
   name = "github.com/go-sql-driver/mysql"
   packages = ["."]
   revision = "d523deb1b23d913de5bdada721a6071e71283618"
@@ -65,10 +71,28 @@
   version = "v2.0.3"
 
 [[projects]]
+  branch = "fix-large-token"
+  name = "github.com/pivotal-golang/lager"
+  packages = ["."]
+  revision = "ce912f1f6e007e955045546229ae42ba5ac66fa7"
+
+[[projects]]
   name = "github.com/pkg/errors"
   packages = ["."]
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/streadway/amqp"
+  packages = ["."]
+  revision = "e5adc2ada8b8efff032bf61173a233d143e9318e"
+
+[[projects]]
+  name = "github.com/vmihailenco/bufio"
+  packages = ["."]
+  revision = "567b2bfa514e796916c4747494d6ff5132a1dfce"
+  version = "v1"
 
 [[projects]]
   branch = "master"
@@ -113,6 +137,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "888f2beda096a0ff2dbde0bdc9dbc82c9e2db787c462b16bea7d18f9d4895e47"
+  inputs-digest = "e44de8911b5bb647f196f1f48cb54c298dd4d10e7c6087a8012c65801bc67e87"
   solver-name = "gps-cdcl"
   solver-version = 1

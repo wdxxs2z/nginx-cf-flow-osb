@@ -5,11 +5,21 @@ type Config struct {
 	AllowUserUpdateParameters    bool    		`yaml:"allow_user_update_parameters"`
 	AllowUserBindParameters      bool               `yaml:"allow_user_bind_parameters"`
 	DatabaseConfig               DB                 `yaml:"db"`
+	AMQPCred                     AMQPCred           `yaml:"amqp_credientals"`
 	NginxBackendInstanceNum      int                `yaml:"per_nginx_backend_instance_num"`
 	StoreDataDir		     string		`yaml:"store_data_dir"`
 	TemplateDir                  string             `yaml:"template_dir"`
 	ServiceSpace                 string             `yaml:"service_space"`
 	Services                     []Service 		`yaml:"services"`
+}
+
+type AMQPCred struct{
+	Host			string			`yaml:"rabbitmq_host"`
+	Port 			int			`yaml:"rabbitmq_port"`
+	Username        	string          	`yaml:"rabbitmq_username"`
+	Password        	string          	`yaml:"rabbitmq_password"`
+	Queue                   string                  `yaml:"rabbitmq_queue"`
+	Exchange                string                  `yaml:"rabbitmq_exchange"`
 }
 
 type DB struct {
