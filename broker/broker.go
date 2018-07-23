@@ -289,6 +289,7 @@ func (nsb *NginxDataflowServiceBroker) Bind(context context.Context, instanceID,
 		return brokerapi.Binding{}, fmt.Errorf("service (%s) not found in catalog", details.ServiceID)
 	}
 	//random port generate
+	//TODO memory store
 	ports := make([]int, 0)
 	for i := 8001; i <= 8001 + nsb.config.NginxBackendInstanceNum ; i++ {
 		ports = append(ports, i)
