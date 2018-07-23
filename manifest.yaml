@@ -8,3 +8,10 @@ applications:
      GOVERSION: go1.8.1
      GOPACKAGENAME: github.com/wdxxs2z/nginx-flow-osb
      DATABASE_HOST: 192.168.11.1
+     DATABASE_PORT: 3306
+     DATABASE_NAME: nginx_flow_db
+     DATABASE_USERNAME: root
+     DATABASE_PASSWORD: 123456
+     CF_API: http://api.local.pcfdev.io
+     CF_USERNAME: admin
+     CF_PASSWORD: admin

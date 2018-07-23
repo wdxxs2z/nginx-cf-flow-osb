@@ -43,10 +43,8 @@ cf enable-service-access nginx-flow-osb
 **host:** the nginx global host name (requred)</br>
 **domain:** the application shared domain (requred)</br>
 
-**curl:** http://127.0.0.1:8080/v2/service_instances/${service_instance_guid} </br>
-
 ```
-cf create-service nginx-flow-osb free nginx-test -c '{"host": "fake", "domain": "local.pcfdev.io"}''
+cf create-service nginx-flow-osb free nginx-test -c '{"host": "fake", "domain": "local.pcfdev.io"}'
 ```
 
 ### bind a application to the nginx proxy service instance
