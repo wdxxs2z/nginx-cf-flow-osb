@@ -561,10 +561,22 @@ func (nsb *NginxDataflowServiceBroker)PreparePushDir(instanceID string, ns route
 	if mkdirErr != nil {
 		return mkdirErr
 	}
+	//index.html
 	_, err := utils.CopyFile(pushDir + "/" + "index.html", nsb.config.TemplateDir + "index.html")
 	if err != nil {
 		return err
 	}
+	//modules
+	_, err = utils.CopyFile(pushDir + "/ngx_http_sticky_module.so", nsb.config.TemplateDir + "modules/ngx_http_sticky_module.so")
+	if err != nil {
+		return err
+	}
+	//mime types
+	_, err = utils.CopyFile(pushDir + "/mime.types", nsb.config.TemplateDir + "mime.types")
+	if err != nil {
+		return err
+	}
+	//nginx config file
 	err = route.ParseNginxTemplate(nsb.config.TemplateDir + "nginx.conf.templ", ns, pushDir + "/" + "nginx.conf")
 	if err != nil {
 		return err

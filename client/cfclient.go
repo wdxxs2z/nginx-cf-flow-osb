@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-community/go-cfclient"
 	"github.com/wdxxs2z/nginx-flow-osb/utils"
 	"code.cloudfoundry.org/lager"
+	"path/filepath"
 )
 
 func targetCFClient() (*cfclient.Client, error){
@@ -516,7 +517,7 @@ func createApplication(client *cfclient.Client, appName, spaceName string) (cfcl
 		SpaceGuid:      app.SpaceGuid,
 		Memory:		128,
 		DiskQuota: 	64,
-		Buildpack:      "staticfile_buildpack",
+		Buildpack:      "nginx-buildpack",
 	}
 	_, err = client.UpdateApp(app.Guid, aur)
 	if err != nil {
@@ -555,13 +556,15 @@ func deleteApplication(client *cfclient.Client, appName string) error{
 }
 
 func uploadApplication(client *cfclient.Client, appGuid, source, des string) error{
-	sourceDir, err := os.Open(source)
+	var files []string
+	err := filepath.Walk(source, func(path string, info os.FileInfo, err error)error{
+		files = append(files, path + "/" + info.Name())
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	defer sourceDir.Close()
-	var files = []*os.File{sourceDir}
-	err = utils.Compress(files, des)
+	err = utils.ZipFiles(des, files)
 	if err != nil {
 		return err
 	}

@@ -1,14 +1,15 @@
+load_module ngx_http_sticky_module.so;
 
 worker_processes 1;
 daemon off;
 
-error_log /home/vcap/app/nginx/logs/error.log;
+error_log stderr;
 events { worker_connections 1024; }
 
 http {
   charset utf-8;
   log_format cloudfoundry '$http_x_forwarded_for - $http_referer - [$time_local] "$request" $status $body_bytes_sent';
-  access_log /home/vcap/app/nginx/logs/access.log cloudfoundry;
+  access_log /dev/stdout cloudfoundry;
   default_type application/octet-stream;
   include mime.types;
   sendfile on;
@@ -46,11 +47,12 @@ http {
       server 127.0.0.1:{{ .Port}}  weight={{ .Weight}};
     {{end}}
     keepalive 20000;
+    ip_hash;
   }
   {{end}}
 
   server {
-    listen 8080;
+    listen {{"{{port}}"}};
     server_name localhost;
 
     location / {
@@ -58,7 +60,7 @@ http {
       {{ $length := len .Nginxs }} {{ if ne $length 0 }}
       proxy_pass http://{{ .ServiceId}};
       {{else}}
-      root /home/vcap/app/public;
+      root /home/vcap/app;
       index index.html index.htm Default.htm;
       {{end}}
     }
