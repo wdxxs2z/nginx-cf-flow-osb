@@ -156,7 +156,10 @@ func UpdateApplicationWorkflow(appName, spaceName, routeName, domainName string,
 	select {
 	case <- errChan :
 		//delete blue application route mapping, and routes
-		return cfclient.App{}, cleanApplicationResource(client, blueApp)
+		if err = cleanApplicationResource(client, blueApp); err != nil {
+			return cfclient.App{}, err
+		}
+		return cfclient.App{}, err
 	case <- successChan :
 		//delete origin application route mapping and not origin app exist routes
 		err = cleanApplicationResource(client, originApp)

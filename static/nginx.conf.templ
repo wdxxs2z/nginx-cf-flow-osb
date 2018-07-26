@@ -1,4 +1,6 @@
-#load_module ngx_http_sticky_module.so;
+{{if .SessionSticky}}
+load_module ngx_http_sticky_module.so;
+{{end}}
 
 worker_processes 1;
 daemon off;
@@ -43,11 +45,14 @@ http {
 
   {{ $length := len .Nginxs }} {{ if ne $length 0 }}
   upstream {{ .ServiceId}} {
-    {{range .Nginxs}}
-      server 127.0.0.1:{{ .Port}}  weight={{ .Weight}};
+    {{if .SessionSticky}}
+    sticky expires=1h;
+    {{else}}
+    keepalive 2000;
     {{end}}
-    keepalive 20000;
-    ip_hash;
+    {{range .Nginxs}}
+    server 127.0.0.1:{{ .Port}}  weight={{ .Weight}};
+    {{end}}
   }
   {{end}}
 

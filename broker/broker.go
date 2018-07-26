@@ -311,11 +311,10 @@ func (nsb *NginxDataflowServiceBroker) Bind(context context.Context, instanceID,
 		return brokerapi.Binding{}, err
 	}
 	if exist == false {
-		return brokerapi.Binding{}, fmt.Errorf("service instance (%s) already delete", instanceID)
+		return brokerapi.Binding{}, brokerapi.ErrInstanceDoesNotExist
 	}
 	//get bind service's application
-	bindAppGuid := details.AppGUID
-	bindApp, err := cfClient.GetApplicationWithGuidWorkflow(bindAppGuid, nsb.logger)
+	bindApp, err := cfClient.GetApplicationWithGuidWorkflow(details.AppGUID, nsb.logger)
 	if err != nil {
 		return brokerapi.Binding{}, err
 	}
@@ -324,7 +323,6 @@ func (nsb *NginxDataflowServiceBroker) Bind(context context.Context, instanceID,
 	if err != nil {
 		return brokerapi.Binding{}, err
 	}
-	//get raw params |{\"name\":\"fakec\",\"url\":\"fakec.local.pcfdev.io\",\"weight\":4,\"port\":8001}|
 	if nsb.allowUserBindParameters {
 		bindParameters := BindParameters{}
 		var bindNginx route.Nginx
@@ -502,8 +500,6 @@ func (nsb *NginxDataflowServiceBroker) Unbind(context context.Context, instanceI
 	return nil
 }
 
-// [{"name":"fakea","url":"fakea.dcos.os","weight":4,"port":8001},{"name":"fakeb","url":"fakeb.dcos.os","weight":6,"port":8002}]
-// -> {"service_id":"64e82332-b919-4188-bb3e-14103ff0e1bd","nginxs":[{"name":"fakea","url":"fakea.dcos.os","weight":4,"port":8001},{"name":"fakeb","url":"fakeb.dcos.os","weight":6,"port":8002}]}
 func (nsb *NginxDataflowServiceBroker)ParseParameters(instanceId string, parameters map[string]interface{}) (route.NginxService, error){
 	ns := route.NginxService{
 		ServiceId:	instanceId,
@@ -523,6 +519,9 @@ func (nsb *NginxDataflowServiceBroker)ParseParameters(instanceId string, paramet
 		}
 		if serviceKey == "domain" {
 			ns.Domain = serviceValue.(string)
+		}
+		if serviceKey == "enable_session_sticky" {
+			ns.SessionSticky = serviceValue.(bool)
 		}
 	}
 	return ns, nil

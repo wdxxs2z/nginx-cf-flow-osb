@@ -44,7 +44,8 @@ cf enable-service-access nginx-flow-osb
 **domain:** the application shared domain (requred)</br>
 
 ```
-cf create-service nginx-flow-osb free nginx-test -c '{"host": "fake", "domain": "local.pcfdev.io"}'
+linux: cf create-service nginx-flow-osb free nginx-test -c '{"host": "fake", "domain": "local.pcfdev.io", "enable_session_sticky": false}'
+win: cf create-service nginx-flow-osb free nginx-test -c "{\"host\": \"fake\", \"domain\": \"local.pcfdev.io\", \"enable_session_sticky\": true}"
 ```
 
 ### bind a application to the nginx proxy service instance

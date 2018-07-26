@@ -10,6 +10,7 @@ type NginxService struct {
 	ServiceId       string				`json:"service_id"`
 	Host            string                          `json:"host"`
 	Domain          string                          `json:"domain"`
+	SessionSticky   bool                            `json:"enable_session_sticky"`
 	Nginxs		[]Nginx				`json:"nginxs"`
 }
 
