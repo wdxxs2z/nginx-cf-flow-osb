@@ -40,7 +40,7 @@ func GetSpaceWorkflow(spaceGuid string, logger lager.Logger)(cfclient.Space,erro
 	return client.GetSpaceByGuid(spaceGuid)
 }
 
-func CreateApplicationWorkflow(appName, spaceName, routeName, domain string, sourceDir string, destinationZip string, logger lager.Logger) (cfclient.App, error){
+func CreateApplicationWorkflow(appName, spaceName, routeName, domain string, sourceDir string, destinationZip string, instanceNum, memory, disk int, buildpack string, logger lager.Logger) (cfclient.App, error){
 	logger.Debug("create-cloudfoundry-application-workflow", lager.Data{
 		"app_name":    appName,
 		"route_name":  routeName,
@@ -56,7 +56,7 @@ func CreateApplicationWorkflow(appName, spaceName, routeName, domain string, sou
 		return cfclient.App{}, err
 	}
 	if app.Name == "" {
-		app, err = createApplication(client, appName, spaceName)
+		app, err = createApplication(client, appName, spaceName, instanceNum, memory, disk, buildpack)
 		if err != nil {
 			return cfclient.App{}, err
 		}
@@ -112,7 +112,7 @@ func UpdateApplicationWorkflow(appName, spaceName, routeName, domainName string,
 		return cfclient.App{}, err
 	}
 	//create a new application blue
-	blueApp, err := createApplication(client, appName + "-blue", spaceName)
+	blueApp, err := createApplication(client, appName + "-blue", spaceName, originApp.Instances, originApp.Memory, originApp.DiskQuota, originApp.Buildpack)
 	if err != nil {
 		return cfclient.App{}, err
 	}
@@ -211,6 +211,24 @@ func DeleteApplcationWorkflow(appName string, instanceDir string, logger lager.L
 		return err
 	}
 	return deleteApplication(client, app.Name)
+}
+
+func CheckApplicationExistWorkflow(appName string, logger lager.Logger) (bool, error) {
+	logger.Debug("check-cloudfoundry-application-workflow", lager.Data{
+		"app_name":    appName,
+	})
+	client, err := targetCFClient()
+	if err != nil {
+		return false, err
+	}
+	app, err := getApplication(client, appName)
+	if err != nil {
+		return false, err
+	}
+	if app.Guid == "" {
+		return false, nil
+	}
+	return true, nil
 }
 
 func GetApplicationWorkflow(appName string, logger lager.Logger) (cfclient.App, error){
@@ -499,7 +517,7 @@ func getMappingRoute(client *cfclient.Client, appGuid, routeGuid string) (*cfcli
 	return mappings[0], nil
 }
 
-func createApplication(client *cfclient.Client, appName, spaceName string) (cfclient.App, error){
+func createApplication(client *cfclient.Client, appName, spaceName string, instanceNum, memory, disk int, buildpack string) (cfclient.App, error){
 	spaceGuid, err := getSpaceGuid(client, spaceName)
 	if err != nil {
 		return cfclient.App{}, err
@@ -515,9 +533,10 @@ func createApplication(client *cfclient.Client, appName, spaceName string) (cfcl
 	aur := cfclient.AppUpdateResource{
 		Name:           app.Name,
 		SpaceGuid:      app.SpaceGuid,
-		Memory:		128,
-		DiskQuota: 	64,
-		Buildpack:      "nginx-buildpack",
+		Memory:		memory,
+		DiskQuota: 	disk,
+		Instances:      instanceNum,
+		Buildpack:      buildpack,
 	}
 	_, err = client.UpdateApp(app.Guid, aur)
 	if err != nil {
@@ -558,7 +577,9 @@ func deleteApplication(client *cfclient.Client, appName string) error{
 func uploadApplication(client *cfclient.Client, appGuid, source, des string) error{
 	var files []string
 	err := filepath.Walk(source, func(path string, info os.FileInfo, err error)error{
-		files = append(files, path + "/" + info.Name())
+		if !info.IsDir() {
+			files = append(files, path)
+		}
 		return nil
 	})
 	if err != nil {
@@ -566,7 +587,7 @@ func uploadApplication(client *cfclient.Client, appGuid, source, des string) err
 	}
 	err = utils.ZipFiles(des, files)
 	if err != nil {
-		return err
+		return fmt.Errorf("zip error: %s", err)
 	}
 	desZipFile ,err := os.Open(des)
 	if err != nil {

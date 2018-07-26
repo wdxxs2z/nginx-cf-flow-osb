@@ -112,17 +112,26 @@ func (nsb *NginxDataflowServiceBroker)Provision(context context.Context, instanc
 	nsb.logger.Debug("provision-service-instance", lager.Data{
 		"instanceId": instanceID,
 	})
+
+	//service define
 	service, _ := nsb.GetService(details.ServiceID)
 	if service.Name == "" {
 		return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("service (%s) not found in catalog", details.ServiceID)
 	}
+	//plan define
+	plan, _ := nsb.GetPlan(service.Id, details.PlanID)
+	if plan.Name == "" {
+		return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("plan (%s) not found in catalog", details.PlanID)
+	}
+	//db service check
 	exist, err := nsb.databaseClient.ExistServiceInstance(instanceID)
 	if err != nil {
 		return brokerapi.ProvisionedServiceSpec{}, err
 	}
 	if exist == true {
-		return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("service instance (%s) already created", instanceID)
+		return brokerapi.ProvisionedServiceSpec{}, brokerapi.ErrInstanceAlreadyExists
 	}
+	//provision
 	if nsb.allowUserProvisionParameters {
 		if len(details.GetRawParameters()) <= 2 {
 			return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("service instance must content host(host:'%s') and domain(domain:'%s') parameters", "fake", "local.pcfdev.io")
@@ -130,6 +139,7 @@ func (nsb *NginxDataflowServiceBroker)Provision(context context.Context, instanc
 		provisionParameters := ProvisionParameters{}
 		sourceDir := nsb.config.StoreDataDir + instanceID
 		destinationDir := nsb.config.StoreDataDir + instanceID + "/" + instanceID + ".zip"
+
 		if jsonErr := json.Unmarshal(details.RawParameters, &provisionParameters); jsonErr != nil {
 			return brokerapi.ProvisionedServiceSpec{}, jsonErr
 		}
@@ -142,10 +152,6 @@ func (nsb *NginxDataflowServiceBroker)Provision(context context.Context, instanc
 			return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("prepare push director err: %s", err)
 		}
 		var spaceName string
-		plan, err := nsb.GetPlan(service.Id, details.PlanID)
-		if err != nil {
-			return brokerapi.ProvisionedServiceSpec{}, err
-		}
 		if plan.EnableSystemSpace {
 			spaceName = nsb.config.ServiceSpace
 		} else {
@@ -155,7 +161,12 @@ func (nsb *NginxDataflowServiceBroker)Provision(context context.Context, instanc
 			}
 			spaceName = space.Name
 		}
-		_, err = cfClient.CreateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir, nsb.logger)
+		_, err = cfClient.CreateApplicationWorkflow("nginx-flow-" + instanceID, spaceName, ns.Host, ns.Domain, sourceDir, destinationDir,
+			plan.InstanceConfig.InstanceNum,
+			plan.InstanceConfig.Memory,
+			plan.InstanceConfig.Disk,
+			plan.InstanceConfig.Buildpack, nsb.logger)
+
 		if err != nil {
 			return brokerapi.ProvisionedServiceSpec{}, fmt.Errorf("create application err: %s", err)
 		}
@@ -425,12 +436,21 @@ func (nsb *NginxDataflowServiceBroker) Unbind(context context.Context, instanceI
 	}
 	sourceDir := nsb.config.StoreDataDir + instanceID
 	destinationDir := nsb.config.StoreDataDir + instanceID + "/" + instanceID + ".zip"
+	//check binding exist in database
 	exist, err := nsb.databaseClient.ExistServiceInstance(instanceID)
 	if err != nil {
 		return err
 	}
 	if exist == false {
-		return fmt.Errorf("service instance (%s) already delete", instanceID)
+		return brokerapi.ErrBindingDoesNotExist
+	}
+	//check service instance exist
+	appExist, err := cfClient.CheckApplicationExistWorkflow("nginx-flow-" + instanceID, nsb.logger)
+	if err != nil {
+		return err
+	}
+	if appExist == false {
+		return brokerapi.ErrBindingDoesNotExist
 	}
 	//get service instance details form db
 	ns, err := nsb.databaseClient.GetServiceInstance(instanceID)
@@ -561,18 +581,8 @@ func (nsb *NginxDataflowServiceBroker)PreparePushDir(instanceID string, ns route
 	if mkdirErr != nil {
 		return mkdirErr
 	}
-	//index.html
-	_, err := utils.CopyFile(pushDir + "/" + "index.html", nsb.config.TemplateDir + "index.html")
-	if err != nil {
-		return err
-	}
-	//modules
-	_, err = utils.CopyFile(pushDir + "/ngx_http_sticky_module.so", nsb.config.TemplateDir + "modules/ngx_http_sticky_module.so")
-	if err != nil {
-		return err
-	}
-	//mime types
-	_, err = utils.CopyFile(pushDir + "/mime.types", nsb.config.TemplateDir + "mime.types")
+	//copy files
+	err := utils.CopyFiles(pushDir, nsb.config.TemplateDir)
 	if err != nil {
 		return err
 	}

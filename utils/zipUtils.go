@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"fmt"
 )
 
 func PathExists(path string) (bool, error) {
@@ -37,7 +36,7 @@ func CopyFile(dstName, srcName string) (written int64, err error) {
 func CopyFiles(dstDir, srcDir string) (error) {
 	err := filepath.Walk(srcDir, func(path string, f os.FileInfo, err error) error {
 		if !f.IsDir() {
-			_, err := CopyFile(dstDir + "/" + f.Name(), srcDir + "/" + f.Name())
+			_, err := CopyFile(dstDir + "/" + f.Name(), path)
 			if err != nil {
 				return err
 			}
@@ -49,8 +48,6 @@ func CopyFiles(dstDir, srcDir string) (error) {
 
 //copy the https://golangcode.com/create-zip-files-in-go
 func ZipFiles(filename string, files []string) error {
-	fmt.Println(filename)
-	fmt.Println(files)
 	newfile, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -60,9 +57,7 @@ func ZipFiles(filename string, files []string) error {
 	zipWriter := zip.NewWriter(newfile)
 	defer zipWriter.Close()
 
-	// Add files to zip
 	for _, file := range files {
-
 		zipfile, err := os.Open(file)
 		if err != nil {
 			return err

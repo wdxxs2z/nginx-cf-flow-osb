@@ -39,11 +39,16 @@ service_config:
       supportUrl: "https://nginx.com"
     plans:
     - id: 7f6ac61e-f449-4a70-8309-875c6250c1c1
-      name: free
-      description: "Free nginx data flow control with system space manage"
+      name: system-manage-service
+      description: "nginx flow control with system space manage"
       bindable: true
       free: true
       use_system_space: true
+      instance_config:
+        instance_num: 1
+        memory: 128
+        disk: 64
+        buildpack: nginx-buildpack
       metadata:
         costs:
           - amount:
@@ -53,11 +58,16 @@ service_config:
           - shared nginx data flow
           - use system space manager
     - id: 187dd7b3-4f6e-4e15-a845-1682fd9ea95b
-      name: self
-      description: "Free nginx data flow control with yourself space manage"
+      name: self-manage-service
+      description: "nginx flow control with yourself space manage"
       bindable: true
       free: true
-      use_system_space: false
+      use_system_space: true
+      instance_config:
+        instance_num: 1
+        memory: 128
+        disk: 64
+        buildpack: nginx-buildpack
       metadata:
         costs:
           - amount:

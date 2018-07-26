@@ -53,7 +53,15 @@ type Plan struct {
 	Free        		*bool 			`yaml:"free"`
 	Bindable    		*bool			`yaml:"bindable"`
 	EnableSystemSpace       bool                    `yaml:"use_system_space"`
+	InstanceConfig          ServiceInstanceConfig   `yaml:"instance_config"`
 	Metadata    		PlanMetadata		`yaml:"metadata"`
+}
+
+type ServiceInstanceConfig struct {
+	InstanceNum		int			`yaml:"instance_num"`
+	Memory			int                     `yaml:"memory"`
+	Disk 			int                     `yaml:"disk"`
+	Buildpack		string                  `yaml:"buildpack"`
 }
 
 type PlanMetadata struct {
